@@ -1,0 +1,1 @@
+../../yachttimer/src/yachtimermodel.h

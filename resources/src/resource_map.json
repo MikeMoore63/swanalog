@@ -1,0 +1,39 @@
+{
+    "friendlyVersion": "dev_0.0",
+    "versionDefName": "APP_RESOURCES",
+
+    "media": [
+
+	{
+        "type": "png",
+        "defName": "IMAGE_MENU_ICON",
+        "file": "images/menu_icon_simpan_watch.png"
+	},
+
+	{
+        "type": "font",
+        "defName": "FONT_PIX_14",
+        "file": "fonts/pix.ttf"
+    },
+	
+	{
+        "type": "png",
+        "defName": "IMAGE_BACKGROUND",
+        "file": "images/simpan_watch_background.png"
+	},
+
+	{
+        "type": "png",
+        "defName": "IMAGE_HOUR_HAND",
+        "file": "images/simpan_watch_hour_hand.png"
+	},
+
+	{
+        "type": "png",
+        "defName": "IMAGE_MINUTE_HAND",
+        "file": "images/simpan_watch_minute_hand.png"
+	}
+
+    ]
+}
+
