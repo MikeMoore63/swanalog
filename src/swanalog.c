@@ -12,10 +12,11 @@ Simple analog watch with date
 
 
 #define MY_UUID { 0x24, 0xD8, 0x92, 0xC9, 0xB1, 0xCB, 0x49, 0xC1, 0xBA, 0xCD, 0x19, 0x97, 0x11, 0x25, 0x9B, 0xE0 }
-PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x0, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
+PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x1, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
 
 
 Window window;
+AppContextRef app;
 
 BmpContainer background_image_container;
 TextLayer text_date_layer;
@@ -23,11 +24,22 @@ RotBmpContainer hour_hand_image_container;
 RotBmpContainer minute_hand_image_container;
 
 YachtTimer myYachtTimer;
-int startappmode=STOPWATCH;
+int startappmode=WATCHMODE;
 
 #define BUTTON_LAP BUTTON_ID_DOWN
 #define BUTTON_RUN BUTTON_ID_SELECT
 #define BUTTON_RESET BUTTON_ID_UP
+#define TIMER_UPDATE 1
+
+// The documentation claims this is defined, but it is not.
+// Define it here for now.
+#ifndef APP_TIMER_INVALID_HANDLE
+    #define APP_TIMER_INVALID_HANDLE 0xDEADBEEF
+#endif
+
+// Actually keeping track of time
+static AppTimerHandle update_timer = APP_TIMER_INVALID_HANDLE;
+static int ticklen=0;
 
 void toggle_stopwatch_handler(ClickRecognizerRef recognizer, Window *window);
 void toggle_mode(ClickRecognizerRef recognizer, Window *window);
@@ -36,6 +48,8 @@ void stop_stopwatch();
 void start_stopwatch();
 void update_hand_positions();
 void config_provider(ClickConfig **config, Window *window);
+// Hook to ticks
+void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie);
 
 // Custom vibration pattern
 const VibePattern start_pattern = {
@@ -53,15 +67,17 @@ void start_stopwatch() {
     yachtimer_start(&myYachtTimer);
 
     // default start mode
-//    startappmode = yachtimer_getMode(&myYachtTimer);;
+    startappmode = yachtimer_getMode(&myYachtTimer);;
 
     // Up the resolution to do deciseconds
- //   if(update_timer != APP_TIMER_INVALID_HANDLE) {
- //       if(app_timer_cancel_event(app, update_timer)) {
- //           update_timer = APP_TIMER_INVALID_HANDLE;
- //       }
- //   }
- //   update_timer = app_timer_send_event(app, yachtimer_getTick(&myYachtTimer), TIMER_UPDATE);
+    if(update_timer != APP_TIMER_INVALID_HANDLE) {
+        if(app_timer_cancel_event(app, update_timer)) {
+            update_timer = APP_TIMER_INVALID_HANDLE;
+        }
+    }
+    // Slow update down to once a second to save power
+    ticklen = yachtimer_getTick(&myYachtTimer);
+    update_timer = app_timer_send_event(app, yachtimer_getTick(&myYachtTimer), TIMER_UPDATE);
 
 }
 // Toggle stopwatch timer mode
@@ -72,21 +88,31 @@ void toggle_mode(ClickRecognizerRef recognizer, Window *window) {
           yachtimer_setMode(&myYachtTimer,mode);
 
 	  // if beyond end mode set back to start
-	  if(yachtimer_getMode(&myYachtTimer) != mode) yachtimer_setMode(&myYachtTimer,0);
+	  if(yachtimer_getMode(&myYachtTimer) != mode) yachtimer_setMode(&myYachtTimer,WATCHMODE);
 	  update_hand_positions();
+	    // Up the resolution to do deciseconds
+	    if(update_timer != APP_TIMER_INVALID_HANDLE) {
+		if(app_timer_cancel_event(app, update_timer)) {
+		    update_timer = APP_TIMER_INVALID_HANDLE;
+		}
+	    }
+	    // Slow update  or speed based on mode
+	    // If WATCH we have no second hand so down to a minute§
+	    ticklen = (yachtimer_getMode(&myYachtTimer) == WATCHMODE) ? ASECOND * 60:yachtimer_getTick(&myYachtTimer);
+	    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE);
 }
 
 void stop_stopwatch() {
 
     yachtimer_stop(&myYachtTimer);
-/*     if(update_timer != APP_TIMER_INVALID_HANDLE) {
+    if(update_timer != APP_TIMER_INVALID_HANDLE) {
         if(app_timer_cancel_event(app, update_timer)) {
             update_timer = APP_TIMER_INVALID_HANDLE;
         }
     }
     // Slow update down to once a second to save power
     ticklen = yachtimer_getTick(&myYachtTimer);
-    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE); */
+    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE); 
 }
 void toggle_stopwatch_handler(ClickRecognizerRef recognizer, Window *window) {
     if(yachtimer_isRunning(&myYachtTimer)) {
@@ -207,6 +233,7 @@ void set_hand_angle(RotBmpContainer *hand_image_container, unsigned int hand_ang
 void update_hand_positions() {
 
   PblTm *t;
+  static char date_text[] = "00 Xxxxxxxxx";
 
   t = yachtimer_getPblDisplayTime(&myYachtTimer);
   theTimeEventType event = yachtimer_triggerEvent(&myYachtTimer);
@@ -216,31 +243,42 @@ void update_hand_positions() {
 
   // get_time(&t);
 
-  set_hand_angle(&hour_hand_image_container, t->tm_min * 6); // ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
+  if(yachtimer_getMode(&myYachtTimer) != WATCHMODE)
+  {
+  	set_hand_angle(&hour_hand_image_container, t->tm_min * 6); // ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
+  	set_hand_angle(&minute_hand_image_container, t->tm_sec * 6);
+  }
+  else
+  {
+  	set_hand_angle(&hour_hand_image_container, ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
+  	set_hand_angle(&minute_hand_image_container, t->tm_min * 6);
+  }
+  t = yachtimer_getPblLastTime(&myYachtTimer);
 
-  set_hand_angle(&minute_hand_image_container, t->tm_sec * 6);
+  string_format_time(date_text, sizeof(date_text), "%e %A", t);
+  text_layer_set_text(&text_date_layer, date_text);
 
 }
 
+void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie)
+{
+   if(cookie == TIMER_UPDATE)
+   {
+  	yachtimer_tick(&myYachtTimer,ticklen);
+	ticklen = yachtimer_getTick(&myYachtTimer);
+	update_timer = app_timer_send_event(ctx, ticklen, TIMER_UPDATE);
+  	update_hand_positions(); // TODO: Pass tick event
+   }
 
-void handle_minute_tick(AppContextRef ctx, PebbleTickEvent *t) {
-  (void)t;
-  (void)ctx;
-  static char date_text[] = "00 Xxxxxxxxx";
-  string_format_time(date_text, sizeof(date_text), "%e %A", t->tick_time);
-  text_layer_set_text(&text_date_layer, date_text);
-  yachtimer_tick(&myYachtTimer,ASECOND);
-
-  update_hand_positions(); // TODO: Pass tick event
 }
 
 
 void handle_init(AppContextRef ctx) {
-  (void)ctx;
+  app = ctx;
 
   window_init(&window, "Simple Analog");
   window_stack_push(&window, true);
-
+  window_set_fullscreen(&window, true);
   resource_init_current_app(&APP_RESOURCES);
   // Arrange for user input.
   window_set_click_config_provider(&window, (ClickConfigProvider) config_provider);
@@ -326,11 +364,7 @@ void pbl_main(void *params) {
   PebbleAppHandlers handlers = {
     .init_handler = &handle_init,
     .deinit_handler = &handle_deinit,
-
-    .tick_info = {
-      .tick_handler = &handle_minute_tick,
-      .tick_units = SECOND_UNIT
-    }
+    .timer_handler = &handle_timer
 
   };
   app_event_loop(params, &handlers);
