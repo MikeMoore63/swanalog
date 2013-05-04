@@ -1,4 +1,3 @@
-
 /*
 
 Simple analog watch with date
@@ -12,7 +11,7 @@ Simple analog watch with date
 
 
 #define MY_UUID { 0x24, 0xD8, 0x92, 0xC9, 0xB1, 0xCB, 0x49, 0xC1, 0xBA, 0xCD, 0x19, 0x97, 0x11, 0x25, 0x9B, 0xE0 }
-PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x1, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
+PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x2, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
 
 
 Window window;
@@ -30,6 +29,22 @@ int startappmode=WATCHMODE;
 #define BUTTON_RUN BUTTON_ID_SELECT
 #define BUTTON_RESET BUTTON_ID_UP
 #define TIMER_UPDATE 1
+#define MODES 4 // Number of watch types stopwatch, coutdown, yachttimer, watch
+#define TICKREMOVE 5
+
+int ticks=0;
+
+BmpContainer modeImages[MODES];
+
+struct modresource {
+	int mode;
+	int resourceid;
+} mapModeImage[MODES] = {
+	   { WATCHMODE, RESOURCE_ID_IMAGE_WATCH },
+           { STOPWATCH, RESOURCE_ID_IMAGE_STOPWATCH },
+	   { YACHTIMER, RESOURCE_ID_IMAGE_YACHTTIMER },
+	   { COUNTDOWN, RESOURCE_ID_IMAGE_COUNTDOWN} };
+
 
 // The documentation claims this is defined, but it is not.
 // Define it here for now.
@@ -96,9 +111,14 @@ void toggle_mode(ClickRecognizerRef recognizer, Window *window) {
 		    update_timer = APP_TIMER_INVALID_HANDLE;
 		}
 	    }
-	    // Slow update  or speed based on mode
-	    // If WATCH we have no second hand so down to a minute§
-	    ticklen = (yachtimer_getMode(&myYachtTimer) == WATCHMODE) ? ASECOND * 60:yachtimer_getTick(&myYachtTimer);
+
+	  for (int i=0;i<MODES;i++)
+	  {
+		layer_set_hidden( &modeImages[i].layer.layer, ((yachtimer_getMode(&myYachtTimer) == mapModeImage[i].mode)?false:true));
+	  }
+	  ticks = 0;
+
+	    ticklen = yachtimer_getTick(&myYachtTimer);
 	    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE);
 }
 
@@ -265,9 +285,22 @@ void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie)
    if(cookie == TIMER_UPDATE)
    {
   	yachtimer_tick(&myYachtTimer,ticklen);
-	ticklen = yachtimer_getTick(&myYachtTimer);
-	update_timer = app_timer_send_event(ctx, ticklen, TIMER_UPDATE);
+
+	// If watch only showing minute had so if WATCh 60 second
+	ticklen = (yachtimer_getMode(&myYachtTimer) == WATCHMODE) ? 1000  * 60:yachtimer_getTick(&myYachtTimer);
+
+	// Set ext wake up for tick < TICKREMOVE wake up every second otherwise do what is asked
+	// we on;y have second disply 
+	update_timer = app_timer_send_event(ctx, (ticks <= TICKREMOVE)?1000:ticklen, TIMER_UPDATE);
   	update_hand_positions(); // TODO: Pass tick event
+	ticks++;
+	if(ticks >= TICKREMOVE) 
+	{
+		for(int i=0;i<MODES;i++)
+		{
+			layer_set_hidden( &modeImages[i].layer.layer, true);
+		}
+	}
    }
 
 }
@@ -288,6 +321,16 @@ void handle_init(AppContextRef ctx) {
   layer_add_child(&window.layer, &background_image_container.layer.layer);
 
 
+
+  for (int i=0;i<MODES;i++)
+  {
+	bmp_init_container(mapModeImage[i].resourceid,&modeImages[i]);
+	layer_set_frame(&modeImages[i].layer.layer, GRect((144 - 12)/2,((144 - 16)/2)+ 25,12,16));
+	layer_set_hidden( &modeImages[i].layer.layer, true);
+	layer_add_child(&window.layer,&modeImages[i].layer.layer);
+  } 
+  ticks = 0;
+
   // Set up a layer for the hour hand
   rotbmp_init_container(RESOURCE_ID_IMAGE_HOUR_HAND, &hour_hand_image_container);
 
@@ -306,8 +349,6 @@ void handle_init(AppContextRef ctx) {
   rot_bitmap_set_src_ic(&minute_hand_image_container.layer, GPoint(2, 56));
 
   layer_add_child(&window.layer, &minute_hand_image_container.layer.layer);
-
-
   text_layer_init(&text_date_layer, window.layer.frame);
   text_layer_set_text_color(&text_date_layer, GColorWhite);
   text_layer_set_background_color(&text_date_layer, GColorClear);
@@ -320,9 +361,12 @@ void handle_init(AppContextRef ctx) {
   // Set up a layer for the second hand
  yachtimer_init(&myYachtTimer,startappmode);
  yachtimer_setConfigTime(&myYachtTimer, ASECOND * 60 * 10);
+ yachtimer_tick(&myYachtTimer,0);
 
 
   update_hand_positions();
+  stop_stopwatch();
+  // update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE);
 
 /* 
   // Setup the black and white circle in the centre of the watch face
@@ -338,6 +382,7 @@ void handle_init(AppContextRef ctx) {
 
 
   layer_add_child(&window.layer, &center_circle_image_container.layer.layer); */
+ 
 
 }
 void config_provider(ClickConfig **config, Window *window) {
@@ -355,6 +400,10 @@ void handle_deinit(AppContextRef ctx) {
   (void)ctx;
 
   bmp_deinit_container(&background_image_container);
+
+  for(int i=0;i<MODES;i++)
+  	bmp_deinit_container(&modeImages[i]);
+
   rotbmp_deinit_container(&hour_hand_image_container);
   rotbmp_deinit_container(&minute_hand_image_container);
 }

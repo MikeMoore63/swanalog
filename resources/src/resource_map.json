@@ -32,8 +32,29 @@
         "type": "png",
         "defName": "IMAGE_MINUTE_HAND",
         "file": "images/simpan_watch_minute_hand.png"
-	}
+	},
 
+	{
+        "type": "png",
+        "defName": "IMAGE_WATCH",
+        "file": "images/watch.png"
+	},
+	{
+        "type": "png",
+        "defName": "IMAGE_STOPWATCH",
+        "file": "images/stopwatch.png"
+	},
+
+	{
+        "type": "png",
+        "defName": "IMAGE_YACHTTIMER",
+        "file": "images/yachttimer.png"
+	},
+	{
+        "type": "png",
+        "defName": "IMAGE_COUNTDOWN",
+        "file": "images/countdown.png"
+	}
     ]
 }
 
