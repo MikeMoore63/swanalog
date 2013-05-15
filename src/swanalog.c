@@ -11,7 +11,7 @@ Simple analog watch with date
 
 
 #define MY_UUID { 0x24, 0xD8, 0x92, 0xC9, 0xB1, 0xCB, 0x49, 0xC1, 0xBA, 0xCD, 0x19, 0x97, 0x11, 0x25, 0x9B, 0xE0 }
-PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x2, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
+PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x3, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
 
 
 Window window;
