@@ -1,0 +1,62 @@
+{
+  "uuid": "24d892c9-b1cb-49c1-bacd-199711259be0",
+  "shortName": "Analog StopWatch",
+  "longName": "Analog StopWatch",
+  "companyName": "MikeM",
+  "versionCode": 1,
+  "versionLabel": "2.0.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {},
+  "resources": {
+    "media": [
+      {
+        "menuIcon": true,
+        "type": "png",
+        "name": "IMAGE_MENU_ICON",
+        "file": "images/menu_icon_simpan_watch.png"
+      },
+      {
+        "type": "font",
+        "name": "FONT_PIX_14",
+        "file": "fonts/pix.ttf"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_BACKGROUND",
+        "file": "images/simpan_watch_background.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_HOUR_HAND",
+        "file": "images/simpan_watch_hour_hand.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_MINUTE_HAND",
+        "file": "images/simpan_watch_minute_hand.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_WATCH",
+        "file": "images/watch.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_STOPWATCH",
+        "file": "images/stopwatch.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_YACHTTIMER",
+        "file": "images/yachttimer.png"
+      },
+      {
+        "type": "png",
+        "name": "IMAGE_COUNTDOWN",
+        "file": "images/countdown.png"
+      }
+    ]
+  }
+}

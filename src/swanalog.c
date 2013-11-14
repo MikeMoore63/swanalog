@@ -4,23 +4,23 @@ Simple analog watch with date
 
  */
 
-#include "pebble_os.h"
-#include "pebble_app.h"
-#include "pebble_fonts.h"
+#include <pebble.h>
 #include "yachtimermodel.h"
 
 
-#define MY_UUID { 0x24, 0xD8, 0x92, 0xC9, 0xB1, 0xCB, 0x49, 0xC1, 0xBA, 0xCD, 0x19, 0x97, 0x11, 0x25, 0x9B, 0xE0 }
-PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x3, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
+// #define MY_UUID { 0x24, 0xD8, 0x92, 0xC9, 0xB1, 0xCB, 0x49, 0xC1, 0xBA, 0xCD, 0x19, 0x97, 0x11, 0x25, 0x9B, 0xE0 }
+// PBL_APP_INFO(MY_UUID, "Analog StopWatch", "MikeM", 0x1, 0x3, RESOURCE_ID_IMAGE_MENU_ICON, APP_INFO_STANDARD_APP);
 
 
-Window window;
-AppContextRef app;
+Window *window;
 
-BmpContainer background_image_container;
-TextLayer text_date_layer;
-RotBmpContainer hour_hand_image_container;
-RotBmpContainer minute_hand_image_container;
+BitmapLayer *background_image_container;
+GBitmap *background_image;
+TextLayer *text_date_layer;
+RotBitmapLayer *hour_hand_image_container;
+GBitmap *hour_hand_image;
+RotBitmapLayer *minute_hand_image_container;
+GBitmap *minute_hand_image;
 
 YachtTimer myYachtTimer;
 int startappmode=WATCHMODE;
@@ -34,7 +34,8 @@ int startappmode=WATCHMODE;
 
 int ticks=0;
 
-BmpContainer modeImages[MODES];
+BitmapLayer *modeImages[MODES];
+GBitmap *mImages[MODES];
 
 struct modresource {
 	int mode;
@@ -53,18 +54,18 @@ struct modresource {
 #endif
 
 // Actually keeping track of time
-static AppTimerHandle update_timer = APP_TIMER_INVALID_HANDLE;
+static AppTimer *update_timer = NULL;
 static int ticklen=0;
 
-void toggle_stopwatch_handler(ClickRecognizerRef recognizer, Window *window);
-void toggle_mode(ClickRecognizerRef recognizer, Window *window);
-void reset_stopwatch_handler(ClickRecognizerRef recognizer, Window *window);
+void toggle_stopwatch_handler(ClickRecognizerRef recognizer, void *data);
+void toggle_mode(ClickRecognizerRef recognizer, void *data);
+void reset_stopwatch_handler(ClickRecognizerRef recognizer, void *data);
 void stop_stopwatch();
 void start_stopwatch();
 void update_hand_positions();
-void config_provider(ClickConfig **config, Window *window);
+void config_provider( void *context);
 // Hook to ticks
-void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie);
+void handle_timer(  void *data);
 
 // Custom vibration pattern
 const VibePattern start_pattern = {
@@ -85,18 +86,18 @@ void start_stopwatch() {
     startappmode = yachtimer_getMode(&myYachtTimer);;
 
     // Up the resolution to do deciseconds
-    if(update_timer != APP_TIMER_INVALID_HANDLE) {
-        if(app_timer_cancel_event(app, update_timer)) {
-            update_timer = APP_TIMER_INVALID_HANDLE;
-        }
+    if(update_timer != NULL) {
+        app_timer_cancel( update_timer);
+        update_timer = NULL;
     }
     // Slow update down to once a second to save power
     ticklen = yachtimer_getTick(&myYachtTimer);
-    update_timer = app_timer_send_event(app, yachtimer_getTick(&myYachtTimer), TIMER_UPDATE);
+    static uint32_t cookie = TIMER_UPDATE;
+    update_timer = app_timer_register( yachtimer_getTick(&myYachtTimer), handle_timer,  &cookie);
 
 }
 // Toggle stopwatch timer mode
-void toggle_mode(ClickRecognizerRef recognizer, Window *window) {
+void toggle_mode(ClickRecognizerRef recognizer, void *data) {
 
           // Can only set to first three 
 	  int mode=yachtimer_getMode(&myYachtTimer)+1;
@@ -106,42 +107,41 @@ void toggle_mode(ClickRecognizerRef recognizer, Window *window) {
 	  if(yachtimer_getMode(&myYachtTimer) != mode) yachtimer_setMode(&myYachtTimer,WATCHMODE);
 	  update_hand_positions();
 	    // Up the resolution to do deciseconds
-	    if(update_timer != APP_TIMER_INVALID_HANDLE) {
-		if(app_timer_cancel_event(app, update_timer)) {
-		    update_timer = APP_TIMER_INVALID_HANDLE;
-		}
+	    if(update_timer != NULL) {
+		app_timer_cancel( update_timer);
+		update_timer = NULL;
 	    }
 
 	  for (int i=0;i<MODES;i++)
 	  {
-		layer_set_hidden( &modeImages[i].layer.layer, ((yachtimer_getMode(&myYachtTimer) == mapModeImage[i].mode)?false:true));
+		layer_set_hidden( (Layer *)modeImages[i], ((yachtimer_getMode(&myYachtTimer) == mapModeImage[i].mode)?false:true));
 	  }
 	  ticks = 0;
-
+	  static uint32_t cookie = TIMER_UPDATE;
 	    ticklen = yachtimer_getTick(&myYachtTimer);
-	    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE);
+	    update_timer = app_timer_register(ticklen, handle_timer, &cookie);
 }
 
 void stop_stopwatch() {
 
     yachtimer_stop(&myYachtTimer);
-    if(update_timer != APP_TIMER_INVALID_HANDLE) {
-        if(app_timer_cancel_event(app, update_timer)) {
-            update_timer = APP_TIMER_INVALID_HANDLE;
-        }
+    if(update_timer != NULL) {
+        app_timer_cancel( update_timer);
+        update_timer = NULL;
     }
     // Slow update down to once a second to save power
     ticklen = yachtimer_getTick(&myYachtTimer);
-    update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE); 
+    static uint32_t cookie = TIMER_UPDATE;
+    update_timer = app_timer_register( ticklen, handle_timer, &cookie); 
 }
-void toggle_stopwatch_handler(ClickRecognizerRef recognizer, Window *window) {
+void toggle_stopwatch_handler(ClickRecognizerRef recognizer, void *data) {
     if(yachtimer_isRunning(&myYachtTimer)) {
         stop_stopwatch();
     } else {
         start_stopwatch();
     }
 }
-void reset_stopwatch_handler(ClickRecognizerRef recognizer, Window *window) {
+void reset_stopwatch_handler(ClickRecognizerRef recognizer, void *data) {
 
     yachtimer_reset(&myYachtTimer);
 
@@ -169,58 +169,17 @@ void reset_stopwatch_handler(ClickRecognizerRef recognizer, Window *window) {
     }
 }
 
-// From src/fw/ui/rotate_bitmap_layer.c
-
-//! newton's method for floor(sqrt(x)) -> should always converge
-static int32_t integer_sqrt(int32_t x) {
-  if (x < 0) {
-    ////    PBL_LOG(LOG_LEVEL_ERROR, "Looking for sqrt of negative number");
-    return 0;
-  }
-
-  int32_t last_res = 0;
-  int32_t res = (x + 1)/2;
-  while (last_res != res) {
-    last_res = res;
-    res = (last_res + x / last_res) / 2;
-  }
-  return res;
-}
-
-void rot_bitmap_set_src_ic(RotBitmapLayer *image, GPoint ic) {
-  image->src_ic = ic;
-
-  // adjust the frame so the whole image will still be visible
-  const int32_t horiz = MAX(ic.x, abs(image->bitmap->bounds.size.w - ic.x));
-  const int32_t vert = MAX(ic.y, abs(image->bitmap->bounds.size.h - ic.y));
-
-  GRect r = layer_get_frame(&image->layer);
-  //// const int32_t new_dist = integer_sqrt(horiz*horiz + vert*vert) * 2;
-  const int32_t new_dist = (integer_sqrt(horiz*horiz + vert*vert) * 2) + 1; //// Fudge to deal with non-even dimensions--to ensure right-most and bottom-most edges aren't cut off.
-
-  r.size.w = new_dist;
-  r.size.h = new_dist;
-  layer_set_frame(&image->layer, r);
-
-  r.origin = GPoint(0, 0);
-  ////layer_set_bounds(&image->layer, r);
-  image->layer.bounds = r;
-
-  image->dest_ic = GPoint(new_dist / 2, new_dist / 2);
-
-  layer_mark_dirty(&(image->layer));
-}
-
-/* ------------------------------------------------------------------------- */
 
 
-void set_hand_angle(RotBmpContainer *hand_image_container, unsigned int hand_angle) {
+
+void set_hand_angle(RotBitmapLayer *hand_image_container, unsigned int hand_angle) {
 
   signed short x_fudge = 0;
   signed short y_fudge = 0;
 
 
-  hand_image_container->layer.rotation =  TRIG_MAX_ANGLE * hand_angle / 360;
+  rot_bitmap_layer_set_angle(hand_image_container, TRIG_MAX_ANGLE * hand_angle / 360);	
+  // hand_image_container->layer.rotation = TRIG_MAX_ANGLE * hand_angle / 360;
 
   //
   // Due to rounding/centre of rotation point/other issues of fitting
@@ -243,16 +202,18 @@ void set_hand_angle(RotBmpContainer *hand_image_container, unsigned int hand_ang
   }
 
   // (144 = screen width, 168 = screen height)
-  hand_image_container->layer.layer.frame.origin.x = (144/2) - (hand_image_container->layer.layer.frame.size.w/2) + x_fudge;
-  hand_image_container->layer.layer.frame.origin.y = (73) - (hand_image_container->layer.layer.frame.size.h/2) + y_fudge;
+  GRect frame = layer_get_frame((Layer *)hand_image_container);
+  frame.origin.x = (144/2) - (frame.size.w/2) + x_fudge;
+  frame.origin.y = (73) - (frame.size.h/2) + y_fudge;
+  layer_set_frame((Layer *)hand_image_container,frame);
 
-  layer_mark_dirty(&hand_image_container->layer.layer);
+  layer_mark_dirty((Layer *)hand_image_container);
 }
 
 
 void update_hand_positions() {
 
-  PblTm *t;
+  struct tm  *t;
   static char date_text[] = "00 Xxxxxxxxx";
 
   t = yachtimer_getPblDisplayTime(&myYachtTimer);
@@ -265,23 +226,24 @@ void update_hand_positions() {
 
   if(yachtimer_getMode(&myYachtTimer) != WATCHMODE)
   {
-  	set_hand_angle(&hour_hand_image_container, t->tm_min * 6); // ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
-  	set_hand_angle(&minute_hand_image_container, t->tm_sec * 6);
+  	set_hand_angle(hour_hand_image_container, t->tm_min * 6); // ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
+  	set_hand_angle(minute_hand_image_container, t->tm_sec * 6);
   }
   else
   {
-  	set_hand_angle(&hour_hand_image_container, ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
-  	set_hand_angle(&minute_hand_image_container, t->tm_min * 6);
+  	set_hand_angle(hour_hand_image_container, ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
+  	set_hand_angle(minute_hand_image_container, t->tm_min * 6);
   }
   t = yachtimer_getPblLastTime(&myYachtTimer);
 
-  string_format_time(date_text, sizeof(date_text), "%e %A", t);
-  text_layer_set_text(&text_date_layer, date_text);
+  strftime(date_text, sizeof(date_text), "%e %A", t);
+  text_layer_set_text(text_date_layer, date_text);
 
 }
 
-void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie)
+void handle_timer( void *data)
 {
+   uint32_t cookie = *(uint32_t *) data;
    if(cookie == TIMER_UPDATE)
    {
   	yachtimer_tick(&myYachtTimer,ticklen);
@@ -291,14 +253,14 @@ void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie)
 
 	// Set ext wake up for tick < TICKREMOVE wake up every second otherwise do what is asked
 	// we on;y have second disply 
-	update_timer = app_timer_send_event(ctx, (ticks <= TICKREMOVE)?1000:ticklen, TIMER_UPDATE);
+	update_timer = app_timer_register( (ticks <= TICKREMOVE)?1000:ticklen, handle_timer, data);
   	update_hand_positions(); // TODO: Pass tick event
 	ticks++;
 	if(ticks >= TICKREMOVE) 
 	{
 		for(int i=0;i<MODES;i++)
 		{
-			layer_set_hidden( &modeImages[i].layer.layer, true);
+			layer_set_hidden( (Layer *)modeImages[i], true);
 		}
 	}
    }
@@ -306,56 +268,62 @@ void handle_timer(AppContextRef ctx, AppTimerHandle handle, uint32_t cookie)
 }
 
 
-void handle_init(AppContextRef ctx) {
-  app = ctx;
+void handle_init() {
 
-  window_init(&window, "Simple Analog");
-  window_stack_push(&window, true);
-  window_set_fullscreen(&window, true);
-  resource_init_current_app(&APP_RESOURCES);
+  window = window_create();
+  // window_init(&window, "Simple Analog");
+  window_stack_push(window, true);
+  window_set_fullscreen(window, true);
+  // resource_init_current_app(&APP_RESOURCES);
   // Arrange for user input.
-  window_set_click_config_provider(&window, (ClickConfigProvider) config_provider);
+  window_set_click_config_provider(window,  config_provider);
 
   // Set up a layer for the static watch face background
-  bmp_init_container(RESOURCE_ID_IMAGE_BACKGROUND, &background_image_container);
-  layer_add_child(&window.layer, &background_image_container.layer.layer);
+  background_image = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_BACKGROUND);
+  background_image_container = bitmap_layer_create(background_image->bounds);
+  bitmap_layer_set_bitmap(background_image_container,background_image);
+  layer_add_child((Layer *)window, (Layer *)background_image_container);
 
 
 
   for (int i=0;i<MODES;i++)
   {
-	bmp_init_container(mapModeImage[i].resourceid,&modeImages[i]);
-	layer_set_frame(&modeImages[i].layer.layer, GRect((144 - 12)/2,((144 - 16)/2)+ 25,12,16));
-	layer_set_hidden( &modeImages[i].layer.layer, true);
-	layer_add_child(&window.layer,&modeImages[i].layer.layer);
+	mImages[i] = gbitmap_create_with_resource(mapModeImage[i].resourceid);
+        modeImages[i] = bitmap_layer_create(mImages[i]->bounds);
+        bitmap_layer_set_bitmap(modeImages[i],mImages[i]);
+	layer_set_frame((Layer *)modeImages[i], GRect((144 - 12)/2,((144 - 16)/2)+ 25,12,16));
+	layer_set_hidden( (Layer *)modeImages[i], true);
+	layer_add_child((Layer *)window,(Layer *)modeImages[i]);
   } 
   ticks = 0;
 
   // Set up a layer for the hour hand
-  rotbmp_init_container(RESOURCE_ID_IMAGE_HOUR_HAND, &hour_hand_image_container);
+  hour_hand_image = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_HOUR_HAND);
+  hour_hand_image_container = rot_bitmap_layer_create(hour_hand_image);
 
   //hour_hand_image_container.layer.compositing_mode = GCompOpClear;
 
-  rot_bitmap_set_src_ic(&hour_hand_image_container.layer, GPoint(4, 37));
+  rot_bitmap_set_src_ic(hour_hand_image_container, GPoint(4, 37));
 
-  layer_add_child(&window.layer, &hour_hand_image_container.layer.layer);
+  layer_add_child((Layer *)window, (Layer *)hour_hand_image_container);
 
 
   // Set up a layer for the minute hand
-  rotbmp_init_container(RESOURCE_ID_IMAGE_MINUTE_HAND, &minute_hand_image_container);
+  minute_hand_image = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_MINUTE_HAND);
+  minute_hand_image_container = rot_bitmap_layer_create(minute_hand_image);
 
  // minute_hand_image_container.layer.compositing_mode = GCompOpClear;
 
-  rot_bitmap_set_src_ic(&minute_hand_image_container.layer, GPoint(2, 56));
+  rot_bitmap_set_src_ic(minute_hand_image_container, GPoint(2, 56));
 
-  layer_add_child(&window.layer, &minute_hand_image_container.layer.layer);
-  text_layer_init(&text_date_layer, window.layer.frame);
-  text_layer_set_text_color(&text_date_layer, GColorWhite);
-  text_layer_set_background_color(&text_date_layer, GColorClear);
-  layer_set_frame(&text_date_layer.layer, GRect(0, 150, 144, 22));
-  text_layer_set_font(&text_date_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_PIX_14)));
-  text_layer_set_text_alignment(&text_date_layer, GTextAlignmentCenter);
-  layer_add_child(&window.layer, &text_date_layer.layer);
+  layer_add_child((Layer *)window, (Layer *)minute_hand_image_container);
+  text_date_layer = text_layer_create( layer_get_bounds((Layer*) window));
+  text_layer_set_text_color(text_date_layer, GColorWhite);
+  text_layer_set_background_color(text_date_layer, GColorClear);
+  layer_set_frame((Layer *)text_date_layer, GRect(0, 150, 144, 22));
+  text_layer_set_font(text_date_layer, fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_PIX_14)));
+  text_layer_set_text_alignment(text_date_layer, GTextAlignmentCenter);
+  layer_add_child((Layer *)window, (Layer *)text_date_layer);
   
   
   // Set up a layer for the second hand
@@ -381,34 +349,44 @@ void handle_init(AppContextRef ctx) {
   center_circle_image_container.layer.layer.frame.origin.y = (168/2) - (center_circle_image_container.layer.layer.frame.size.h/2);
 
 
-  layer_add_child(&window.layer, &center_circle_image_container.layer.layer); */
+  layer_add_child((Layer *)window, &center_circle_image_container.layer.layer); */
  
 
 }
-void config_provider(ClickConfig **config, Window *window) {
-    config[BUTTON_RUN]->click.handler = (ClickHandler)toggle_stopwatch_handler;
-    config[BUTTON_LAP]->click.handler = (ClickHandler) toggle_mode;
-    config[BUTTON_RESET]->click.handler = (ClickHandler)reset_stopwatch_handler;
-//    config[BUTTON_LAP]->click.handler = (ClickHandler)lap_time_handler;
-//    config[BUTTON_LAP]->long_click.handler = (ClickHandler)handle_display_lap_times;
-//    config[BUTTON_LAP]->long_click.delay_ms = 700;
-    (void)window;
+void config_provider( void *data) {
+    window_single_click_subscribe(BUTTON_RUN, toggle_stopwatch_handler);
+    // config[BUTTON_RUN]->click.handler = (ClickHandler)toggle_stopwatch_handler;
+    window_single_click_subscribe(BUTTON_LAP, toggle_mode);
+    // config[BUTTON_LAP]->click.handler = (ClickHandler) toggle_mode;
+    window_single_click_subscribe(BUTTON_RESET, reset_stopwatch_handler);
+    // config[BUTTON_RESET]->click.handler = (ClickHandler)reset_stopwatch_handler;
 }
 
 
-void handle_deinit(AppContextRef ctx) {
-  (void)ctx;
+void handle_deinit() {
 
-  bmp_deinit_container(&background_image_container);
+  bitmap_layer_destroy(background_image_container);
+  gbitmap_destroy(background_image);
 
   for(int i=0;i<MODES;i++)
-  	bmp_deinit_container(&modeImages[i]);
+  {
+	bitmap_layer_destroy(modeImages[i]);
+	gbitmap_destroy(mImages[i]);
+  }
 
-  rotbmp_deinit_container(&hour_hand_image_container);
-  rotbmp_deinit_container(&minute_hand_image_container);
+  text_layer_destroy(text_date_layer);
+  rot_bitmap_layer_destroy(hour_hand_image_container);
+  gbitmap_destroy(hour_hand_image);
+  rot_bitmap_layer_destroy(minute_hand_image_container);
+  gbitmap_destroy(minute_hand_image);
 }
 
-
+int main(void) {
+	handle_init();
+	app_event_loop();
+	handle_deinit();
+}
+/*
 void pbl_main(void *params) {
   PebbleAppHandlers handlers = {
     .init_handler = &handle_init,
@@ -418,3 +396,4 @@ void pbl_main(void *params) {
   };
   app_event_loop(params, &handlers);
 }
+*/
