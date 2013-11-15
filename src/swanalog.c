@@ -22,7 +22,7 @@ GBitmap *hour_hand_image;
 RotBitmapLayer *minute_hand_image_container;
 GBitmap *minute_hand_image;
 
-YachtTimer myYachtTimer;
+YachtTimer *myYachtTimer;
 int startappmode=WATCHMODE;
 
 #define BUTTON_LAP BUTTON_ID_DOWN
@@ -80,10 +80,10 @@ const VibePattern start_pattern = {
 #define MAX(a,b) (((a)>(b))?(a):(b))
 
 void start_stopwatch() {
-    yachtimer_start(&myYachtTimer);
+    yachtimer_start(myYachtTimer);
 
     // default start mode
-    startappmode = yachtimer_getMode(&myYachtTimer);;
+    startappmode = yachtimer_getMode(myYachtTimer);;
 
     // Up the resolution to do deciseconds
     if(update_timer != NULL) {
@@ -91,20 +91,20 @@ void start_stopwatch() {
         update_timer = NULL;
     }
     // Slow update down to once a second to save power
-    ticklen = yachtimer_getTick(&myYachtTimer);
+    ticklen = yachtimer_getTick(myYachtTimer);
     static uint32_t cookie = TIMER_UPDATE;
-    update_timer = app_timer_register( yachtimer_getTick(&myYachtTimer), handle_timer,  &cookie);
+    update_timer = app_timer_register( yachtimer_getTick(myYachtTimer), handle_timer,  &cookie);
 
 }
 // Toggle stopwatch timer mode
 void toggle_mode(ClickRecognizerRef recognizer, void *data) {
 
           // Can only set to first three 
-	  int mode=yachtimer_getMode(&myYachtTimer)+1;
-          yachtimer_setMode(&myYachtTimer,mode);
+	  int mode=yachtimer_getMode(myYachtTimer)+1;
+          yachtimer_setMode(myYachtTimer,mode);
 
 	  // if beyond end mode set back to start
-	  if(yachtimer_getMode(&myYachtTimer) != mode) yachtimer_setMode(&myYachtTimer,WATCHMODE);
+	  if(yachtimer_getMode(myYachtTimer) != mode) yachtimer_setMode(myYachtTimer,WATCHMODE);
 	  update_hand_positions();
 	    // Up the resolution to do deciseconds
 	    if(update_timer != NULL) {
@@ -114,28 +114,28 @@ void toggle_mode(ClickRecognizerRef recognizer, void *data) {
 
 	  for (int i=0;i<MODES;i++)
 	  {
-		layer_set_hidden( (Layer *)modeImages[i], ((yachtimer_getMode(&myYachtTimer) == mapModeImage[i].mode)?false:true));
+		layer_set_hidden( (Layer *)modeImages[i], ((yachtimer_getMode(myYachtTimer) == mapModeImage[i].mode)?false:true));
 	  }
 	  ticks = 0;
 	  static uint32_t cookie = TIMER_UPDATE;
-	    ticklen = yachtimer_getTick(&myYachtTimer);
+	    ticklen = yachtimer_getTick(myYachtTimer);
 	    update_timer = app_timer_register(ticklen, handle_timer, &cookie);
 }
 
 void stop_stopwatch() {
 
-    yachtimer_stop(&myYachtTimer);
+    yachtimer_stop(myYachtTimer);
     if(update_timer != NULL) {
         app_timer_cancel( update_timer);
         update_timer = NULL;
     }
     // Slow update down to once a second to save power
-    ticklen = yachtimer_getTick(&myYachtTimer);
+    ticklen = yachtimer_getTick(myYachtTimer);
     static uint32_t cookie = TIMER_UPDATE;
     update_timer = app_timer_register( ticklen, handle_timer, &cookie); 
 }
 void toggle_stopwatch_handler(ClickRecognizerRef recognizer, void *data) {
-    if(yachtimer_isRunning(&myYachtTimer)) {
+    if(yachtimer_isRunning(myYachtTimer)) {
         stop_stopwatch();
     } else {
         start_stopwatch();
@@ -143,14 +143,14 @@ void toggle_stopwatch_handler(ClickRecognizerRef recognizer, void *data) {
 }
 void reset_stopwatch_handler(ClickRecognizerRef recognizer, void *data) {
 
-    yachtimer_reset(&myYachtTimer);
+    yachtimer_reset(myYachtTimer);
 
-    switch(yachtimer_getMode(&myYachtTimer))
+    switch(yachtimer_getMode(myYachtTimer))
     {
         case STOPWATCH:
         case YACHTIMER:
         case COUNTDOWN:
-            if(yachtimer_isRunning(&myYachtTimer))
+            if(yachtimer_isRunning(myYachtTimer))
             {
                  stop_stopwatch();
                  start_stopwatch();
@@ -216,15 +216,15 @@ void update_hand_positions() {
   struct tm  *t;
   static char date_text[] = "00 Xxxxxxxxx";
 
-  t = yachtimer_getPblDisplayTime(&myYachtTimer);
-  theTimeEventType event = yachtimer_triggerEvent(&myYachtTimer);
+  t = yachtimer_getPblDisplayTime(myYachtTimer);
+  theTimeEventType event = yachtimer_triggerEvent(myYachtTimer);
 
   if(event == MinorTime) vibes_double_pulse();
   if(event == MajorTime) vibes_enqueue_custom_pattern(start_pattern);
 
   // get_time(&t);
 
-  if(yachtimer_getMode(&myYachtTimer) != WATCHMODE)
+  if(yachtimer_getMode(myYachtTimer) != WATCHMODE)
   {
   	set_hand_angle(hour_hand_image_container, t->tm_min * 6); // ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
   	set_hand_angle(minute_hand_image_container, t->tm_sec * 6);
@@ -234,7 +234,7 @@ void update_hand_positions() {
   	set_hand_angle(hour_hand_image_container, ((t->tm_hour % 12) * 30) + (t->tm_min/2)); // ((((t->tm_hour % 12) * 6) + (t->tm_min / 10))) / (12 * 6));
   	set_hand_angle(minute_hand_image_container, t->tm_min * 6);
   }
-  t = yachtimer_getPblLastTime(&myYachtTimer);
+  t = yachtimer_getPblLastTime(myYachtTimer);
 
   strftime(date_text, sizeof(date_text), "%e %A", t);
   text_layer_set_text(text_date_layer, date_text);
@@ -246,10 +246,10 @@ void handle_timer( void *data)
    uint32_t cookie = *(uint32_t *) data;
    if(cookie == TIMER_UPDATE)
    {
-  	yachtimer_tick(&myYachtTimer,ticklen);
+  	yachtimer_tick(myYachtTimer,ticklen);
 
 	// If watch only showing minute had so if WATCh 60 second
-	ticklen = (yachtimer_getMode(&myYachtTimer) == WATCHMODE) ? 1000  * 60:yachtimer_getTick(&myYachtTimer);
+	ticklen = (yachtimer_getMode(myYachtTimer) == WATCHMODE) ? 1000  * 60:yachtimer_getTick(myYachtTimer);
 
 	// Set ext wake up for tick < TICKREMOVE wake up every second otherwise do what is asked
 	// we on;y have second disply 
@@ -327,14 +327,16 @@ void handle_init() {
   
   
   // Set up a layer for the second hand
- yachtimer_init(&myYachtTimer,startappmode);
- yachtimer_setConfigTime(&myYachtTimer, ASECOND * 60 * 10);
- yachtimer_tick(&myYachtTimer,0);
+ myYachtTimer = yachtimer_create(startappmode);
+ startappmode = yachtimer_getMode(myYachtTimer);;
+ yachtimer_tick(myYachtTimer,0);
 
 
   update_hand_positions();
-  stop_stopwatch();
-  // update_timer = app_timer_send_event(app, ticklen, TIMER_UPDATE);
+  // Slow update down to once a second to save power
+  ticklen = yachtimer_getTick(myYachtTimer);
+  static uint32_t cookie = TIMER_UPDATE;
+  update_timer = app_timer_register( ticklen, handle_timer, &cookie); 
 
 /* 
   // Setup the black and white circle in the centre of the watch face
@@ -379,6 +381,7 @@ void handle_deinit() {
   gbitmap_destroy(hour_hand_image);
   rot_bitmap_layer_destroy(minute_hand_image_container);
   gbitmap_destroy(minute_hand_image);
+  yachtimer_destroy(myYachtTimer);
 }
 
 int main(void) {
