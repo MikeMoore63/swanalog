@@ -272,8 +272,8 @@ void handle_init() {
 
   window = window_create();
   // window_init(&window, "Simple Analog");
-  window_stack_push(window, true);
   window_set_fullscreen(window, true);
+  window_stack_push(window, true);
   // resource_init_current_app(&APP_RESOURCES);
   // Arrange for user input.
   window_set_click_config_provider(window,  config_provider);
