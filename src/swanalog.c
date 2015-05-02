@@ -280,7 +280,7 @@ void handle_init() {
 
   // Set up a layer for the static watch face background
   background_image = gbitmap_create_with_resource(RESOURCE_ID_IMAGE_BACKGROUND);
-  background_image_container = bitmap_layer_create(background_image->bounds);
+  background_image_container = bitmap_layer_create(gbitmap_get_bounds(background_image));
   bitmap_layer_set_bitmap(background_image_container,background_image);
   layer_add_child((Layer *)window, (Layer *)background_image_container);
 
@@ -289,7 +289,7 @@ void handle_init() {
   for (int i=0;i<MODES;i++)
   {
 	mImages[i] = gbitmap_create_with_resource(mapModeImage[i].resourceid);
-        modeImages[i] = bitmap_layer_create(mImages[i]->bounds);
+        modeImages[i] = bitmap_layer_create(gbitmap_get_bounds(mImages[i]));
         bitmap_layer_set_bitmap(modeImages[i],mImages[i]);
 	layer_set_frame((Layer *)modeImages[i], GRect((144 - 12)/2,((144 - 16)/2)+ 25,12,16));
 	layer_set_hidden( (Layer *)modeImages[i], true);

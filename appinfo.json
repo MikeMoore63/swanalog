@@ -3,8 +3,8 @@
   "shortName": "Analog StopWatch",
   "longName": "Analog StopWatch",
   "companyName": "MikeM",
-  "versionCode": 1,
-  "versionLabel": "2.1",
+  "versionCode": 3,
+  "versionLabel": "3.0",
   "watchapp": {
     "watchface": false
   },
@@ -58,5 +58,10 @@
         "file": "images/countdown.png"
       }
     ]
-  }
+  },
+  "targetPlatforms": [
+    "aplite",
+    "basalt"
+  ],
+  "sdkVersion": "3"
 }
