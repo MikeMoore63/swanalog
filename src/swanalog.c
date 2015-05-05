@@ -272,7 +272,10 @@ void handle_init() {
 
   window = window_create();
   // window_init(&window, "Simple Analog");
+#ifdef PBL_SDK_3
+#else
   window_set_fullscreen(window, true);
+#endif
   window_stack_push(window, true);
   // resource_init_current_app(&APP_RESOURCES);
   // Arrange for user input.
